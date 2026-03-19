@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DB_URL")
+}
+
+enum RoleName {
+  USER
+  EMPLOYEE
+  MANAGER
+}
+
+model Role {
+  id   Int      @id @default(autoincrement())
+  name RoleName @unique
+
+  users User[]
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  email        String?  @unique
+  name         String?
+  passwordHash String?
+
+  roleId Int?
+  role   Role? @relation(fields: [roleId], references: [id])
+
+  // Tokens for Google OAuth (used for Calendar / Sheets / Docs).
+  googleRefreshToken   String?
+  googleTokenUpdatedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  zonesCreated Zone[]    @relation("ZoneCreatedBy")
+  employeeShifts Shift[] @relation("EmployeeShifts")
+  shiftsCreated Shift[]  @relation("ShiftCreatedBy")
+  reportsCreated Report[] @relation("ReportCreatedBy")
+}
+
+model Zone {
+  id Int @id @default(autoincrement())
+
+  name String
+  // Polygon as array of points: [{ lat: number, lng: number }, ...]
+  polygon Json
+
+  createdById Int
+  createdBy   User @relation("ZoneCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  shifts        Shift[]
+  observations  Observation[]
+}
+
+model Shift {
+  id Int @id @default(autoincrement())
+
+  zoneId Int
+  zone   Zone @relation(fields: [zoneId], references: [id])
+
+  employeeId Int
+  employee   User @relation("EmployeeShifts", fields: [employeeId], references: [id])
+
+  createdById Int
+  createdBy   User @relation("ShiftCreatedBy", fields: [createdById], references: [id])
+
+  startAt DateTime
+  endAt   DateTime
+  createdAt DateTime @default(now())
+
+  // Google Calendar event id (if created successfully)
+  googleEventId String?
+}
+
+model Observation {
+  id Int @id @default(autoincrement())
+
+  zoneId Int
+  zone   Zone @relation(fields: [zoneId], references: [id])
+
+  intervalStart DateTime
+  intervalEnd   DateTime
+
+  // Aggregated metrics for 5-minute interval
+  metrics Json
+
+  createdAt DateTime @default(now())
+
+  @@unique([zoneId, intervalStart])
+  @@index([zoneId, intervalStart])
+}
+
+model Report {
+  id Int @id @default(autoincrement())
+
+  createdById Int
+  createdBy   User @relation("ReportCreatedBy", fields: [createdById], references: [id])
+
+  fromAt DateTime
+  toAt   DateTime
+
+  // Selected zones
+  zoneIds Int[]
+
+  createdAt DateTime @default(now())
+
+  // Google Docs output
+  googleDocId  String?
+  googleDocUrl String?
+  summary String?
+}
+
