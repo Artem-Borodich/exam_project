@@ -1,4 +1,4 @@
-# Diagrams (Exam-Requirement Aligned)
+<img width="1536" height="1024" alt="Схемы веб-приложения в одном кадре" src="https://github.com/user-attachments/assets/cbf72088-73dd-4c4a-9a19-254116cbcdfe" /># Diagrams (Exam-Requirement Aligned)
 
 ## ER Diagram (Mermaid)
 ```mermaid
@@ -52,6 +52,7 @@ erDiagram
   Zone ||--o{ Duty : "assigned to zone"
   Duty ||--o{ DutyResult : "records"
 ```
+<img width="1536" height="1024" alt="Схемы веб-приложения в одном кадре" src="https://github.com/user-attachments/assets/4ae3ac81-439a-4117-8270-96d9216e06ce" />
 
 ## UML Use Case Diagram (Mermaid)
 ```mermaid
