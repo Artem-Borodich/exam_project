@@ -57,6 +57,7 @@ export function ManagerConfirmPage() {
             key={u.id}
             style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}
           >
+            <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>ID: {u.id}</div>
             <div style={{ fontWeight: 600 }}>{u.email}</div>
             <div style={{ color: "#555" }}>
               {u.name ? `Name: ${u.name}` : ""}
