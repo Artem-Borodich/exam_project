@@ -68,8 +68,6 @@ export async function handleGoogleCallback(code: string): Promise<{ token: strin
     throw new HttpError(400, "Google did not provide an email");
   }
 
-  const usernameFromEmail = email.split("@")[0].toLowerCase();
-
   const user = await prisma.user.upsert({
     where: { email: email },
     update: {
@@ -78,19 +76,20 @@ export async function handleGoogleCallback(code: string): Promise<{ token: strin
       googleTokenUpdatedAt: new Date(),
     },
     create: {
-      username: usernameFromEmail,
       email,
       name,
+      password: null,
       googleRefreshToken: refreshToken,
       googleTokenUpdatedAt: new Date(),
-      roleId: null, // новый пользователь будет подтвержден менеджером
+      role: null, // new user will be approved by manager
+      isApproved: false,
     },
-    select: { id: true, username: true, role: { select: { name: true } } },
+    select: { id: true, email: true, role: true, isApproved: true },
   });
 
   const tokenPayload: JwtPayload = {
     userId: user.id,
-    roleName: user.role?.name ?? undefined,
+    role: user.role ?? undefined,
   };
 
   const token = signJwt(tokenPayload, jwtSecret);

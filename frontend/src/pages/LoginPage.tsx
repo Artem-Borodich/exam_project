@@ -2,6 +2,7 @@ import type { FormEvent } from "react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
+import { api } from "../services/api";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -10,6 +11,16 @@ export function LoginPage() {
   const [form, setForm] = useState({ login: "", password: "" });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  async function connectGoogle() {
+    setError(null);
+    try {
+      const { data } = await api.get<{ url: string }>("/auth/google/start");
+      window.location.href = data.url;
+    } catch (e: any) {
+      setError(e?.response?.data?.message ?? e?.message ?? "Google OAuth failed");
+    }
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -28,9 +39,14 @@ export function LoginPage() {
   return (
     <div style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
       <h1>Login</h1>
+      <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+        <button type="button" onClick={connectGoogle} style={{ padding: "10px 16px" }}>
+          Sign in with Google
+        </button>
+      </div>
       <form onSubmit={onSubmit}>
         <div style={{ marginBottom: 12 }}>
-          <label>Login</label>
+          <label>Email</label>
           <input
             value={form.login}
             onChange={(e) => setForm((s) => ({ ...s, login: e.target.value }))}

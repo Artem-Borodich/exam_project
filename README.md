@@ -1,9 +1,9 @@
 # exam_project (дипломный production-проект)
 
 ## Стек
-- Backend: Node.js + Express, TypeScript, PostgreSQL + Prisma, JWT, Google OAuth
+- Backend: Node.js + Express, TypeScript, MySQL + Prisma, JWT, Google OAuth
 - Frontend: React + TypeScript, Axios, Zustand, React Router, Leaflet
-- Интеграции: Google Calendar API, Google Sheets API, Google Docs API
+- Интеграции: Google OAuth (login), Google Calendar API (опционально для напоминаний)
 
 ## Структура проекта
 ```
@@ -33,14 +33,14 @@
 - `user` (без роли) создаётся при `POST /api/auth/register` или через Google OAuth
 - `manager подтверждает → employee` через `GET /api/roles/pending` + `POST /api/roles/confirm`
 - автоматически создаётся `manager`:
-  - login: `manager`
+  - login/email: `manager`
   - password: `12345`
 
 ## Настройка окружения
 
 ### Backend `.env`
 Создайте `backend/.env` на основе `backend/.env.example`:
-- `DB_URL=postgresql://...`
+- `DB_URL=mysql://user:password@host:3306/dbname`
 - `JWT_SECRET=...`
 - `FRONTEND_URL=http://localhost:5173`
 
@@ -49,8 +49,6 @@ Google OAuth + API:
 - `GOOGLE_CLIENT_SECRET=...`
 - `GOOGLE_REDIRECT_URI=http://localhost:4000/api/auth/google/callback`
 - `GOOGLE_CALENDAR_ID=primary` (опционально)
-- `GOOGLE_SHEETS_ID=...` (для `/api/observations/sync`)
-- `GOOGLE_SHEETS_RANGE=Observations!A:C` (опционально)
 
 ### Frontend `.env`
 Создайте `frontend/.env`:
@@ -66,13 +64,13 @@ Google OAuth + API:
   - `cd ../frontend`
   - `npm install`
 
-2) База данных (Prisma)
+2) База данных и миграции (Prisma)
 - `cd backend`
-- `npm run prisma:generate`
-- `npm run prisma:migrate` (нужен доступ к Postgres)
-- (опционально) `npm run prisma:studio`
-
-После миграций Prisma seed создаст роли и manager автоматически.
+- `npm run setup`
+  - скрипт сам создаст/обновит `backend/.env` (DB_URL и JWT_SECRET)
+  - при необходимости переключит auth plugin MySQL (например `sha256_password` -> `mysql_native_password`)
+  - создаст БД (если её нет)
+  - запустит `prisma migrate` и seed (создаст roles и manager: `manager` / `12345`)
 
 3) Запуск backend
 - `cd backend`
@@ -87,16 +85,8 @@ Google OAuth + API:
   - `GET /api/auth/google/start` → redirect на Google
   - `GET /api/auth/google/callback` → обмен code на refresh_token → выпуск JWT
 - Google Calendar:
-  - при создании смены (`POST /api/shifts`) backend создаёт событие в Calendar (через refresh_token employee)
-- Google Sheets:
-  - `/api/observations/sync` читает строки и upsert-ит `Observations` по `(zoneId, intervalStart)`
-  - формат строк (по умолчанию ожидаются колонки):
-    - `[0] zoneName`
-    - `[1] intervalStart`
-    - `[2] intervalEnd` (опционально; иначе +5 минут)
-    - `[3] metrics JSON` (опционально)
-- Google Docs:
-  - `POST /api/reports/generate` агрегирует Observation по выбранным зонам и периоду, затем создаёт Google Doc
+  - при создании duty (`POST /api/duties`) backend создаёт событие (если у employee есть connected Google),
+    с напоминаниями за `1 день` и `1 час`
 
 ## Диаграммы
 См. `docs/diagrams.md`.

@@ -7,8 +7,7 @@ import * as googleOAuthService from "../services/googleOAuth.service";
 import { prisma } from "../services/prisma";
 
 const RegisterSchema = z.object({
-  username: z.string().min(3).max(30),
-  email: z.string().email().optional(),
+  email: z.string().min(1).max(120),
   name: z.string().min(1).max(80).optional(),
   password: z.string().min(6).max(120),
 });
@@ -42,10 +41,10 @@ export const me = [
       where: { id: req.user.id },
       select: {
         id: true,
-        username: true,
         email: true,
         name: true,
-        role: { select: { name: true } },
+        role: true,
+        isApproved: true,
         createdAt: true,
       },
     });
@@ -54,10 +53,10 @@ export const me = [
 
     res.json({
       id: user.id,
-      username: user.username,
       email: user.email,
       name: user.name,
-      roleName: user.role?.name ?? null,
+      roleName: user.role ?? null,
+      isApproved: user.isApproved,
       createdAt: user.createdAt,
     });
   }),

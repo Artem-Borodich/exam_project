@@ -2,12 +2,13 @@ import { prisma } from "./prisma";
 import { createCalendarEvent } from "./googleCalendar.service";
 import { HttpError } from "../utils/httpError";
 
-export async function createShift(input: {
+export async function createDuty(input: {
   zoneId: number;
   employeeId: number;
   createdById: number;
-  startAt: Date;
-  endAt: Date;
+  date: Date; // date-only (midnight UTC)
+  startTime: string; // "HH:mm"
+  endTime: string; // "HH:mm"
   timezone?: string;
 }) {
   const zone = await prisma.zone.findUnique({
@@ -18,49 +19,54 @@ export async function createShift(input: {
 
   const employee = await prisma.user.findUnique({
     where: { id: input.employeeId },
-    select: { id: true, username: true, googleRefreshToken: true },
+    select: { id: true, email: true, role: true, isApproved: true, googleRefreshToken: true },
   });
-  if (!employee) throw new Error("Employee not found");
-
-  if (!employee.googleRefreshToken) {
-    // Google интеграция для календаря требует токены пользователя.
-    throw new HttpError(400, "Employee has not connected Google OAuth");
+  if (!employee) throw new HttpError(404, "Employee not found");
+  if (employee.role !== "EMPLOYEE" || !employee.isApproved) {
+    throw new HttpError(400, "User is not an approved employee");
   }
 
-  const summary = `Shift: ${zone.name}`;
-  const description = `Employee: ${employee.username}`;
+  // Optional: create calendar event for the duty (if employee connected Google).
+  if (employee.googleRefreshToken) {
+    const startAt = new Date(`${input.date.toISOString().slice(0, 10)}T${input.startTime}:00.000Z`);
+    const endAt = new Date(`${input.date.toISOString().slice(0, 10)}T${input.endTime}:00.000Z`);
 
-  const calendar = await createCalendarEvent({
-    userRefreshToken: employee.googleRefreshToken,
-    summary,
-    description,
-    startAt: input.startAt,
-    endAt: input.endAt,
-    location: zone.name,
-    timezone: input.timezone,
-  });
+    await createCalendarEvent({
+      userRefreshToken: employee.googleRefreshToken,
+      summary: `Duty: ${zone.name}`,
+      description: `Employee: ${employee.email}`,
+      startAt,
+      endAt,
+      location: zone.name,
+      timezone: input.timezone ?? "UTC",
+      reminders: [
+        { method: "popup", minutes: 60 * 24 }, // 1 day before
+        { method: "popup", minutes: 60 }, // 1 hour before
+      ],
+    });
+  }
 
-  const shift = await prisma.shift.create({
+  const duty = await prisma.duty.create({
     data: {
       zoneId: input.zoneId,
       employeeId: input.employeeId,
       createdById: input.createdById,
-      startAt: input.startAt,
-      endAt: input.endAt,
-      googleEventId: calendar.googleEventId ?? null,
+      date: input.date,
+      startTime: input.startTime,
+      endTime: input.endTime,
     },
     include: {
       zone: { select: { id: true, name: true } },
-      employee: { select: { id: true, username: true } },
+      employee: { select: { id: true, email: true } },
     },
   });
 
-  return shift;
+  return duty;
 }
 
-export async function listShifts(input: {
+export async function listDuties(input: {
   viewerUserId: number;
-  viewerRole: "MANAGER" | "EMPLOYEE" | "USER";
+  viewerRole: "MANAGER" | "EMPLOYEE";
   fromAt?: Date;
   toAt?: Date;
   zoneId?: number;
@@ -69,26 +75,25 @@ export async function listShifts(input: {
   const where: any = {};
 
   if (input.fromAt || input.toAt) {
-    where.startAt = {};
-    if (input.fromAt) where.startAt.gte = input.fromAt;
-    if (input.toAt) where.startAt.lte = input.toAt;
+    where.date = {};
+    if (input.fromAt) where.date.gte = input.fromAt;
+    if (input.toAt) where.date.lte = input.toAt;
   }
 
   if (input.zoneId) where.zoneId = input.zoneId;
 
   if (input.viewerRole !== "MANAGER") {
-    // employee sees only their own shifts
     where.employeeId = input.viewerUserId;
   } else if (input.employeeId) {
     where.employeeId = input.employeeId;
   }
 
-  return prisma.shift.findMany({
+  return prisma.duty.findMany({
     where,
-    orderBy: { startAt: "asc" },
+    orderBy: [{ date: "asc" }, { startTime: "asc" }],
     include: {
       zone: { select: { id: true, name: true } },
-      employee: { select: { id: true, username: true } },
+      employee: { select: { id: true, email: true } },
     },
   });
 }

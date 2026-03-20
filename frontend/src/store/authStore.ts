@@ -1,14 +1,14 @@
 import { create } from "zustand";
 import { api } from "../services/api";
 
-export type RoleName = "USER" | "EMPLOYEE" | "MANAGER" | null;
+export type RoleName = "EMPLOYEE" | "MANAGER" | null;
 
 export type UserDto = {
   id: number;
-  username: string;
-  email: string | null;
+  email: string;
   name: string | null;
   roleName: RoleName;
+  isApproved: boolean;
   createdAt: string;
 };
 
@@ -21,12 +21,7 @@ type AuthState = {
   logout: () => void;
 
   loadMe: () => Promise<void>;
-  register: (payload: {
-    username: string;
-    email?: string;
-    name?: string;
-    password: string;
-  }) => Promise<void>;
+  register: (payload: { email: string; name?: string; password: string }) => Promise<void>;
   login: (payload: { login: string; password: string }) => Promise<void>;
 };
 

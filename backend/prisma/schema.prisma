@@ -3,116 +3,95 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DB_URL")
 }
 
-enum RoleName {
-  USER
+enum UserRole {
   EMPLOYEE
   MANAGER
 }
 
-model Role {
-  id   Int      @id @default(autoincrement())
-  name RoleName @unique
-
-  users User[]
-}
-
 model User {
-  id           Int      @id @default(autoincrement())
-  username     String   @unique
-  email        String?  @unique
-  name         String?
-  passwordHash String?
+  id Int @id @default(autoincrement())
 
-  roleId Int?
-  role   Role? @relation(fields: [roleId], references: [id])
+  // Exam requirements: email + password + role (nullable) + isApproved
+  email    String @unique
+  password String?
+  role     UserRole?
+  isApproved Boolean @default(false)
 
-  // Tokens for Google OAuth (used for Calendar / Sheets / Docs).
+  name String?
+
+  // Used for optional integrations (Google OAuth for calendar events & reminders)
   googleRefreshToken   String?
   googleTokenUpdatedAt DateTime?
 
   createdAt DateTime @default(now())
 
-  zonesCreated Zone[]    @relation("ZoneCreatedBy")
-  employeeShifts Shift[] @relation("EmployeeShifts")
-  shiftsCreated Shift[]  @relation("ShiftCreatedBy")
-  reportsCreated Report[] @relation("ReportCreatedBy")
+  zonesCreated Zone[] @relation("ZoneCreatedBy")
+  createdDuties Duty[] @relation("DutyCreatedBy")
+  employeeDuties Duty[] @relation("DutyEmployee")
 }
 
 model Zone {
   id Int @id @default(autoincrement())
 
   name String
-  // Polygon as array of points: [{ lat: number, lng: number }, ...]
-  polygon Json
+  // Exam requirements: store polygon coordinates in DB (polygon drawing support)
+  polygonCoordinates Json
 
   createdById Int
   createdBy   User @relation("ZoneCreatedBy", fields: [createdById], references: [id])
 
   createdAt DateTime @default(now())
 
-  shifts        Shift[]
-  observations  Observation[]
+  duties Duty[]
 }
 
-model Shift {
+model Duty {
   id Int @id @default(autoincrement())
-
-  zoneId Int
-  zone   Zone @relation(fields: [zoneId], references: [id])
 
   employeeId Int
-  employee   User @relation("EmployeeShifts", fields: [employeeId], references: [id])
-
-  createdById Int
-  createdBy   User @relation("ShiftCreatedBy", fields: [createdById], references: [id])
-
-  startAt DateTime
-  endAt   DateTime
-  createdAt DateTime @default(now())
-
-  // Google Calendar event id (if created successfully)
-  googleEventId String?
-}
-
-model Observation {
-  id Int @id @default(autoincrement())
+  employee   User @relation("DutyEmployee", fields: [employeeId], references: [id])
 
   zoneId Int
   zone   Zone @relation(fields: [zoneId], references: [id])
 
-  intervalStart DateTime
-  intervalEnd   DateTime
-
-  // Aggregated metrics for 5-minute interval
-  metrics Json
-
-  createdAt DateTime @default(now())
-
-  @@unique([zoneId, intervalStart])
-  @@index([zoneId, intervalStart])
-}
-
-model Report {
-  id Int @id @default(autoincrement())
+  // Exam requirements: date + startTime + endTime (interval)
+  date DateTime
+  startTime String // "HH:mm"
+  endTime   String // "HH:mm"
 
   createdById Int
-  createdBy   User @relation("ReportCreatedBy", fields: [createdById], references: [id])
-
-  fromAt DateTime
-  toAt   DateTime
-
-  // Selected zones
-  zoneIds Int[]
+  createdBy   User @relation("DutyCreatedBy", fields: [createdById], references: [id])
 
   createdAt DateTime @default(now())
 
-  // Google Docs output
-  googleDocId  String?
-  googleDocUrl String?
-  summary String?
+  results DutyResult[]
+
+  @@index([zoneId, date])
+}
+
+model DutyResult {
+  id Int @id @default(autoincrement())
+
+  dutyId Int
+  duty   Duty @relation(fields: [dutyId], references: [id])
+
+  trafficLightId Int
+  // Exam requirements: for each 5-minute interval store startTime + metrics
+  startTime DateTime
+
+  greenWithCars Int
+  greenWithoutCars Int
+  redWithCars Int
+  redWithoutCars Int
+
+  createdAt DateTime @default(now())
+
+  // Avoid duplicates for the same duty interval and traffic light
+  @@unique([dutyId, trafficLightId, startTime])
+  @@index([startTime])
 }
 

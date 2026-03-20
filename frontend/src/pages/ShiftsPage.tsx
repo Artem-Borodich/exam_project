@@ -3,13 +3,13 @@ import { api } from "../services/api";
 import { useAuthStore } from "../store/authStore";
 
 type Zone = { id: number; name: string };
-type Shift = {
+type Duty = {
   id: number;
-  startAt: string;
-  endAt: string;
   zone: { id: number; name: string };
-  employee: { id: number; username: string };
-  googleEventId: string | null;
+  employee: { id: number; email: string };
+  date: string;
+  startTime: string;
+  endTime: string;
 };
 
 function toDateInputValue(d: Date) {
@@ -25,13 +25,17 @@ export function ShiftsPage() {
   const roleName = user?.roleName ?? null;
 
   const [zones, setZones] = useState<Zone[]>([]);
-  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [duties, setDuties] = useState<Duty[]>([]);
 
   const [zoneId, setZoneId] = useState<number | null>(null);
   const [employeeId, setEmployeeId] = useState<number>(0);
   const [date, setDate] = useState<string>(() => toDateInputValue(new Date()));
-  const [time, setTime] = useState<string>(() => toTimeInputValue(new Date()));
-  const [durationMinutes, setDurationMinutes] = useState<number>(480);
+  const [startTime, setStartTime] = useState<string>(() => toTimeInputValue(new Date()));
+  const [endTime, setEndTime] = useState<string>(() => {
+    const d = new Date();
+    d.setHours(d.getHours() + 8);
+    return toTimeInputValue(d);
+  });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,14 +46,14 @@ export function ShiftsPage() {
     if (data.length > 0) setZoneId((prev) => prev ?? data[0].id);
   }
 
-  async function loadShifts() {
+  async function loadDuties() {
     setLoading(true);
     setError(null);
     try {
-      const { data } = await api.get<Shift[]>("/shifts");
-      setShifts(data);
+      const { data } = await api.get<Duty[]>("/duties");
+      setDuties(data);
     } catch (e: any) {
-      setError(e?.response?.data?.message ?? e?.message ?? "Failed to load shifts");
+      setError(e?.response?.data?.message ?? e?.message ?? "Failed to load duties");
     } finally {
       setLoading(false);
     }
@@ -57,18 +61,13 @@ export function ShiftsPage() {
 
   useEffect(() => {
     loadZones().catch(() => {});
-    loadShifts().catch(() => {});
+    loadDuties().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const canCreate = useMemo(() => roleName === "MANAGER", [roleName]);
 
-  async function connectGoogle() {
-    const { data } = await api.get<{ url: string }>("/auth/google/start");
-    window.location.href = data.url;
-  }
-
-  async function createShift() {
+  async function createDuty() {
     if (!zoneId) {
       setError("Choose zone");
       return;
@@ -77,7 +76,7 @@ export function ShiftsPage() {
       setError("Choose employeeId");
       return;
     }
-    if (!date || !time) {
+    if (!date || !startTime || !endTime) {
       setError("Provide date/time");
       return;
     }
@@ -85,17 +84,17 @@ export function ShiftsPage() {
     setLoading(true);
     setError(null);
     try {
-      await api.post("/shifts", {
+      await api.post("/duties", {
         zoneId,
         employeeId,
         date,
-        time,
-        durationMinutes,
+        startTime,
+        endTime,
         timezone: "UTC",
       });
-      await loadShifts();
+      await loadDuties();
     } catch (e: any) {
-      setError(e?.response?.data?.message ?? e?.message ?? "Create shift failed");
+      setError(e?.response?.data?.message ?? e?.message ?? "Create duty failed");
     } finally {
       setLoading(false);
     }
@@ -103,12 +102,9 @@ export function ShiftsPage() {
 
   return (
     <div style={{ maxWidth: 980, margin: "24px auto", padding: 16 }}>
-      <h1>Shifts</h1>
+      <h1>Duties</h1>
 
       <div style={{ marginBottom: 16, display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <button onClick={connectGoogle} style={{ padding: "10px 14px" }}>
-          Connect Google (OAuth)
-        </button>
         {roleName ? <div style={{ paddingTop: 10 }}>Role: {roleName}</div> : null}
       </div>
 
@@ -117,7 +113,7 @@ export function ShiftsPage() {
       <div style={{ display: "grid", gridTemplateColumns: "420px 1fr", gap: 16 }}>
         <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
           <div style={{ fontWeight: 700, marginBottom: 10 }}>
-            Create shift {canCreate ? "(manager)" : "(read-only)"}
+            Create duty {canCreate ? "(manager)" : "(read-only)"}
           </div>
 
           <div style={{ marginBottom: 12 }}>
@@ -147,7 +143,7 @@ export function ShiftsPage() {
               min={1}
             />
             <div style={{ fontSize: 12, color: "#666", marginTop: 6 }}>
-              Employee must have connected Google to create calendar events.
+              Only approved employees (role=employee) can be assigned.
             </div>
           </div>
 
@@ -164,61 +160,55 @@ export function ShiftsPage() {
 
           <div style={{ marginBottom: 12 }}>
             <label>Time</label>
-            <input
-              type="time"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-              style={{ width: "100%", padding: 8, marginTop: 6 }}
-              disabled={!canCreate}
-            />
-          </div>
-
-          <div style={{ marginBottom: 12 }}>
-            <label>Duration (minutes)</label>
-            <input
-              type="number"
-              value={durationMinutes}
-              onChange={(e) => setDurationMinutes(Number(e.target.value))}
-              style={{ width: "100%", padding: 8, marginTop: 6 }}
-              disabled={!canCreate}
-              min={30}
-            />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 12, color: "#666" }}>Start</div>
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  style={{ width: "100%", padding: 8, marginTop: 6 }}
+                  disabled={!canCreate}
+                />
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: "#666" }}>End</div>
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  style={{ width: "100%", padding: 8, marginTop: 6 }}
+                  disabled={!canCreate}
+                />
+              </div>
+            </div>
           </div>
 
           <button
-            onClick={createShift}
+            onClick={createDuty}
             disabled={!canCreate || loading}
             style={{ width: "100%", padding: "10px 14px" }}
           >
-            {loading ? "Creating..." : "Create shift + Calendar event"}
+            {loading ? "Creating..." : "Create duty"}
           </button>
         </div>
 
         <div>
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>Upcoming shifts</div>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>Upcoming duties</div>
           {loading ? <div>Loading...</div> : null}
           <div style={{ display: "grid", gap: 12 }}>
-            {shifts.map((s) => (
+            {duties.map((s) => (
               <div key={s.id} style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
                 <div style={{ fontWeight: 700 }}>
-                  {s.zone.name} - {s.employee.username}
+                  {s.zone.name} - {s.employee.email}
                 </div>
                 <div style={{ color: "#555", fontSize: 13 }}>
-                  {new Date(s.startAt).toLocaleString()} .. {new Date(s.endAt).toLocaleString()}
+                  {new Date(s.date).toISOString().slice(0, 10)} {s.startTime} .. {s.endTime}
                 </div>
-                {s.googleEventId ? (
-                  <div style={{ fontSize: 12, marginTop: 6, color: "#2b7a0b" }}>
-                    Google event id: {s.googleEventId}
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 12, marginTop: 6, color: "#999" }}>
-                    No Google calendar event id
-                  </div>
-                )}
               </div>
             ))}
           </div>
-          {shifts.length === 0 && !loading ? <div>No shifts yet.</div> : null}
+          {duties.length === 0 && !loading ? <div>No duties yet.</div> : null}
         </div>
       </div>
     </div>

@@ -1,91 +1,153 @@
-# Диаграммы (текстовое представление)
+# Diagrams (Exam-Requirement Aligned)
 
-## 1) IDEF0 (декомпозиция)
+## ER Diagram (Mermaid)
+```mermaid
+erDiagram
+  User {
+    int id PK
+    string email "unique"
+    string password "hashed (stored as password)"
+    UserRole role "null|EMPLOYEE|MANAGER"
+    boolean isApproved
+    string name
+    string googleRefreshToken
+    datetime googleTokenUpdatedAt
+    datetime createdAt
+  }
 
-`A0: Управление сменами, наблюдениями и отчётами`
-- Inputs (I): регистрации пользователей/подтверждения ролей, полигоны зон, график смен, данные из Google Sheets (5-мин интервалы), критерии отчета (период+зоны)
-- Controls (C): политики ролей (user/employee/manager), JWT-авторизация, OAuth-область доступа Google, правила 5-мин интервалов
-- Outputs (O): созданные смены, события в Google Calendar, сохраненные Observations, созданные документы в Google Docs
-- Mechanisms (M): backend-сервисы (Express/TS), Prisma+PostgreSQL, Google APIs (OAuth/Calendar/Sheets/Docs)
+  Zone {
+    int id PK
+    string name
+    json polygonCoordinates
+    int createdById FK
+    datetime createdAt
+  }
 
-`A1: Регистрация и подтверждение пользователей`
-- I: данные регистрации, Google OAuth token/code
-- C: роли user/employee/manager
-- O: user без роли → подтвержден employee, manager создан автоматически
-- M: Prisma seed, Auth сервис
+  Duty {
+    int id PK
+    int employeeId FK
+    int zoneId FK
+    datetime date "UTC date-only"
+    string startTime "HH:mm"
+    string endTime "HH:mm"
+    int createdById FK
+    datetime createdAt
+  }
 
-`A2: Управление зонами`
-- I: имя зоны и polygon (массив координат)
-- C: права manager, валидация полигона
-- O: сохраненная Zone с polygon JSON
-- M: Zone service + Leaflet-подбор полигона во frontend
+  DutyResult {
+    int id PK
+    int dutyId FK
+    int trafficLightId
+    datetime startTime "5-minute interval start"
+    int greenWithCars
+    int greenWithoutCars
+    int redWithCars
+    int redWithoutCars
+    datetime createdAt
+  }
 
-`A3: Назначение смен`
-- I: дата+время+зона, employeeId
-- C: role-check manager, наличие Google refresh_token у employee
-- O: Shift в БД + событие в Google Calendar
-- M: Shift service + Google Calendar API
+  User ||--o{ Zone : "createdBy"
+  User ||--o{ Duty : "createdBy (manager)"
+  User ||--o{ Duty : "employee duties"
+  Zone ||--o{ Duty : "assigned to zone"
+  Duty ||--o{ DutyResult : "records"
+```
 
-`A4: Синхронизация Observations`
-- I: данные из Google Sheets
-- C: права manager, формат таблицы (колонки: zoneName, intervalStart, intervalEnd?, metrics?)
-- O: Observation записи по 5-мин интервалам (upsert)
-- M: Google Sheets API + Observations service
+## UML Use Case Diagram (Mermaid)
+```mermaid
+usecaseDiagram
+  actor Manager
+  actor Employee
+  actor "Unregistered User" as Unreg
+  actor "Google OAuth" as Google
+  actor "Google Calendar (optional)" as Cal
 
-`A5: Генерация Reports`
-- I: период+выбранные зоны
-- C: role-check manager, доступ к Google Docs (tokens)
-- O: созданный Google Docs документ с агрегированной статистикой
-- M: Reports service + Google Docs API
+  Unreg --> Register : register()
+  Unreg --> Login : login(email,password)
 
-## 2) ER-диаграмма (связи)
+  Unreg --> (Login via Google) : OAuth login()
+  Google --> (Login via Google)
 
-Сущности:
-- `Role(id, name)`
-- `User(id, username, email?, passwordHash?, roleId?, googleRefreshToken?)`
-- `Zone(id, name, polygon: Json, createdById)`
-- `Shift(id, zoneId, employeeId, createdById, startAt, endAt, googleEventId?)`
-- `Observation(id, zoneId, intervalStart, intervalEnd, metrics: Json)`
-- `Report(id, createdById, fromAt, toAt, zoneIds Int[], googleDocId?, googleDocUrl?, summary?)`
+  Manager --> "Approve user" : confirm pending -> set role=employee
+  Manager --> "Create zone" : draw polygon + save
+  Manager --> "Assign duty" : choose employee,date,startTime,endTime,zone
 
-Связи:
-- `Role 1 — N User` (User.roleId → Role.id, roleId nullable)
-- `User 1 — N Zone` (createdById → User.id)
-- `User 1 — N Shift` как employee (employeeId → User.id)
-- `User 1 — N Shift` как createdBy (createdById → User.id)
-- `Zone 1 — N Shift` (zoneId → Zone.id)
-- `Zone 1 — N Observation` (zoneId → Zone.id)
-- `Report — User` (createdById → User.id)
+  Employee --> "View duties" : GET /duties (own duties)
+  Employee --> "Submit duty results" : POST /duty-results/bulk (5-min intervals)
 
-Ограничения:
-- `Observation` уникальна по `(zoneId, intervalStart)` (5-мин интервалы)
+  Manager --> "Generate report" : select zone + date range -> aggregated buckets
 
-## 3) Use Case (кратко)
+  Manager --> (Create duty event) : optional calendar event
+  Cal --> (Create duty event)
+```
 
-- User:
-  - Register (создать аккаунт, role отсутствует до подтверждения manager)
-  - Login
-  - OAuth Google (подключить Google для дальнейших интеграций)
-- Manager:
-  - Confirm pending users → назначить role `employee`
-  - Create zone (polygon через карту)
-  - Create shifts (дата+время+зона, привязка к employeeId)
-  - Sync observations из Google Sheets
-  - Generate report (период+зоны) → создание Google Docs
-- Employee:
-  - Login
-  - OAuth Google
-  - Просмотр своих shifts
+## Deployment Diagram (Mermaid)
+```mermaid
+flowchart LR
+  Browser[Browser (React/Leaflet)] --> FE[Frontend (Vite/React)]
+  FE --> BE[Backend (Express/TypeScript, REST API)]
+  BE --> DB[(MySQL + Prisma)]
+  FE -->|OSM tiles| OSM[(OpenStreetMap)]
+  FE -->|Polygon drawing UI| BE
+  BE -->|Google OAuth| GOAuth[(Google OAuth)]
+  BE -->|Optional reminders/events| GCal[(Google Calendar API)]
+```
 
-## 4) Deployment (схема)
+## IDEF0 Level 0 + Level 1
 
-Обычно production разворачивается так:
-- `frontend` (Vite/React) — статическая сборка в CDN или на отдельном web-сервере
-- `backend` (Node/Express) — контейнер/VM, порт `4000`
-- `postgres` — managed DB (например, RDS/Cloud SQL), env `DB_URL`
-- Google:
-  - OAuth consent экран
-  - Calendar API для создания событий смен
-  - Sheets API для чтения Observations
-  - Docs API для генерации Reports
+### A0: Duty Scheduling Information System with Reporting
+- Inputs (I)
+  - User registration/login (email+password and Google OAuth code)
+  - Zone polygon coordinates drawn on map
+  - Manager duty assignment (employee, date, startTime, endTime, zone)
+  - Employee duty results (per 5-minute interval: trafficLightId, startTime, 4 metrics)
+  - Manager reporting parameters (zone + date range)
+- Controls (C)
+  - Role rules: `role = null` initially, manager approves -> `role = employee`
+  - Manager access rules (JWT + role=MANAGER)
+  - Employee submission rules (only approved duty owner)
+  - Reporting rules: fixed time buckets 06:00–21:00 and required aggregation columns
+- Outputs (O)
+  - Persisted `Duty` records
+  - Persisted `DutyResult` rows (5-minute intervals)
+  - Manager-generated duty results report grouped by day
+  - Optional Google Calendar events + reminders for duties
+- Mechanisms (M)
+  - Backend services (Express/TS), Prisma ORM
+  - MySQL database
+  - Leaflet + OpenStreetMap (polygon drawing)
+  - Google OAuth (login) and optional Google Calendar API
+
+### A1: User Approval & Roles
+- Inputs (I): registration data / Google OAuth email
+- Controls (C): unapproved users keep `role = null` until manager approves
+- Outputs (O): approved employees have `role = EMPLOYEE` and `isApproved = true`
+- Mechanisms (M): JWT, Prisma seed (default manager: `manager` / `12345`), roles endpoints
+
+### A2: Zone Management (Polygon)
+- Inputs (I): zone name + polygon points from Leaflet drawing UI
+- Controls (C): manager-only access + polygon validation
+- Outputs (O): `Zone` with `polygonCoordinates` stored in DB
+- Mechanisms (M): Leaflet UI + backend zone service
+
+### A3: Duty Scheduling
+- Inputs (I): employeeId, date, startTime, endTime, zoneId
+- Controls (C): manager-only access + employee must be approved
+- Outputs (O): `Duty` created; optional calendar event created with reminders
+- Mechanisms (M): duty service + optional Google Calendar integration
+
+### A4: Duty Results Entry (5-minute intervals)
+- Inputs (I): dutyId + per-interval duty result records
+- Controls (C): employee-only; startTime must be within duty and 5-minute aligned
+- Outputs (O): upserted `DutyResult` rows
+- Mechanisms (M): duty-results service + Prisma upsert
+
+### A5: Reporting (Fixed Buckets, Group by Day)
+- Inputs (I): selected zone + date range
+- Controls (C): time buckets {06-09,09-12,12-15,15-18,18-21} and required aggregation formulas
+- Outputs (O): report aggregated per day and bucket with:
+  - greenWithCars
+  - greenWithoutCars + redWithoutCars
+  - redWithCars
+- Mechanisms (M): reporting service queries + aggregation logic
 

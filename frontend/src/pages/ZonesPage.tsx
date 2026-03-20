@@ -9,7 +9,7 @@ type PolygonPoint = { lat: number; lng: number };
 type Zone = {
   id: number;
   name: string;
-  polygon: PolygonPoint[];
+  polygonCoordinates: PolygonPoint[];
   createdAt: string;
 };
 
@@ -183,7 +183,7 @@ export function ZonesPage() {
           <div key={z.id} style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
             <div style={{ fontWeight: 700 }}>{z.name}</div>
             <div style={{ color: "#555", fontSize: 12 }}>
-              Points: {z.polygon.length}
+                  Points: {z.polygonCoordinates.length}
             </div>
             <div style={{ color: "#777", fontSize: 12, marginTop: 8 }}>
               Created: {new Date(z.createdAt).toLocaleString()}

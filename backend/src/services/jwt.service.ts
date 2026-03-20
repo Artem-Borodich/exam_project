@@ -2,8 +2,8 @@ import jwt from "jsonwebtoken";
 
 export type JwtPayload = {
   userId: number;
-  // Неформально храним roleName, но источник истины - БД.
-  roleName?: string;
+  // Optional shortcut for client-side; backend authorization still uses DB.
+  role?: "EMPLOYEE" | "MANAGER";
 };
 
 export function signJwt(payload: JwtPayload, secret: string) {

@@ -10,6 +10,7 @@ export async function createCalendarEvent(input: {
   endAt: Date;
   location?: string;
   timezone?: string;
+  reminders?: Array<{ method: string; minutes: number }>;
 }) {
   const env = getEnv(process.env);
   const googleEnv = requireGoogleEnv(env);
@@ -43,6 +44,17 @@ export async function createCalendarEvent(input: {
           dateTime: input.endAt.toISOString(),
           timeZone: input.timezone,
         },
+        ...(input.reminders
+          ? {
+              reminders: {
+                useDefault: false,
+                overrides: input.reminders.map((r) => ({
+                  method: r.method,
+                  minutes: r.minutes,
+                })),
+              },
+            }
+          : {}),
       },
     });
 

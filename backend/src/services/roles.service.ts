@@ -1,16 +1,14 @@
 import { prisma } from "./prisma";
 import { HttpError } from "../utils/httpError";
 
-type RoleName = "USER" | "EMPLOYEE" | "MANAGER";
-
 export async function getPendingUsers() {
   return prisma.user.findMany({
-    where: { roleId: null },
+    where: { role: null, isApproved: false },
     select: {
       id: true,
-      username: true,
       email: true,
       name: true,
+      isApproved: true,
       createdAt: true,
     },
     orderBy: { createdAt: "asc" },
@@ -18,12 +16,9 @@ export async function getPendingUsers() {
 }
 
 export async function confirmAsEmployee(userId: number) {
-  const role = await prisma.role.findUnique({ where: { name: "EMPLOYEE" as RoleName } });
-  if (!role) throw new HttpError(500, "EMPLOYEE role not initialized");
-
   const updated = await prisma.user.updateMany({
-    where: { id: userId, roleId: null },
-    data: { roleId: role.id },
+    where: { id: userId, role: null, isApproved: false },
+    data: { role: "EMPLOYEE", isApproved: true },
   });
 
   if (updated.count === 0) {

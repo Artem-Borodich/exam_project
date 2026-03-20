@@ -3,65 +3,53 @@ import { prisma } from "./prisma";
 import { signJwt, type JwtPayload } from "./jwt.service";
 import { HttpError } from "../utils/httpError";
 
-type RoleName = "USER" | "EMPLOYEE" | "MANAGER";
-
 export async function registerUser(input: {
-  username: string;
-  email?: string;
+  email: string;
   name?: string;
   password: string;
 }) {
-  const { username, email, name, password } = input;
+  const { email, name, password } = input;
 
-  const existing = await prisma.user.findFirst({
-    where: {
-      OR: [{ username }, ...(email ? [{ email }] : [])],
-    },
-    select: { id: true, username: true, email: true },
-  });
-
-  if (existing) {
-    throw new HttpError(409, "User already exists");
-  }
+  const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  if (existing) throw new HttpError(409, "User already exists");
 
   const passwordHash = await bcrypt.hash(password, 10);
 
   const user = await prisma.user.create({
     data: {
-      username,
       email,
       name: name ?? null,
-      passwordHash,
-      roleId: null, // pending confirmation by manager
+      password: passwordHash,
+      role: null, // pending confirmation by manager
+      isApproved: false,
     },
-    select: { id: true, username: true, role: { select: { name: true } } },
+    select: { id: true, email: true, role: true, isApproved: true },
   });
 
   return {
     id: user.id,
-    username: user.username,
-    roleName: (user.role?.name ?? null) as RoleName | null,
+    email: user.email,
+    roleName: user.role ?? null,
+    isApproved: user.isApproved,
     message:
       "User created. Waiting for manager confirmation (role will be assigned by manager).",
   };
 }
 
 export async function login(input: {
-  login: string;
+  login: string; // exam: treat login as email string
   password: string;
 }) {
   const user = await prisma.user.findFirst({
-    where: {
-      OR: [{ username: input.login }, { email: input.login }],
-    },
-    include: { role: true },
+    where: { email: input.login },
+    select: { id: true, email: true, password: true, role: true, isApproved: true },
   });
 
-  if (!user || !user.passwordHash) {
+  if (!user || !user.password) {
     throw new HttpError(401, "Invalid credentials");
   }
 
-  const ok = await bcrypt.compare(input.password, user.passwordHash);
+  const ok = await bcrypt.compare(input.password, user.password);
   if (!ok) {
     throw new HttpError(401, "Invalid credentials");
   }
@@ -73,7 +61,7 @@ export async function login(input: {
 
   const tokenPayload: JwtPayload = {
     userId: user.id,
-    roleName: user.role?.name ?? undefined,
+    role: user.role ?? undefined,
   };
 
   const token = signJwt(tokenPayload, jwtSecret);
@@ -82,8 +70,9 @@ export async function login(input: {
     token,
     user: {
       id: user.id,
-      username: user.username,
-      roleName: (user.role?.name ?? null) as RoleName | null,
+      email: user.email,
+      roleName: user.role ?? null,
+      isApproved: user.isApproved,
     },
   };
 }

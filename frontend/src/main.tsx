@@ -12,10 +12,12 @@ import { ZonesPage } from "./pages/ZonesPage";
 import { ShiftsPage } from "./pages/ShiftsPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { ManagerConfirmPage } from "./pages/ManagerConfirmPage";
+import { DutyResultsPage } from "./pages/DutyResultsPage";
+import { DashboardPage } from "./pages/DashboardPage";
 
 function HomeRedirect() {
   const token = useAuthStore((s) => s.token);
-  return <Navigate to={token ? "/zones" : "/login"} replace />;
+  return <Navigate to={token ? "/dashboard" : "/login"} replace />;
 }
 
 function Bootstrap() {
@@ -38,17 +40,26 @@ function Bootstrap() {
       <Route path="/auth/google-callback" element={<GoogleCallbackPage />} />
 
       <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <DashboardPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
         path="/zones"
         element={
-          <ProtectedRoute allowedRoles={["USER", "EMPLOYEE", "MANAGER"]}>
+          <ProtectedRoute allowedRoles={["EMPLOYEE", "MANAGER"]}>
             <ZonesPage />
           </ProtectedRoute>
         }
       />
       <Route
-        path="/shifts"
+        path="/duties"
         element={
-          <ProtectedRoute allowedRoles={["USER", "EMPLOYEE", "MANAGER"]}>
+          <ProtectedRoute allowedRoles={["EMPLOYEE", "MANAGER"]}>
             <ShiftsPage />
           </ProtectedRoute>
         }
@@ -66,6 +77,14 @@ function Bootstrap() {
         element={
           <ProtectedRoute allowedRoles={["MANAGER"]}>
             <ReportsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/duty-results"
+        element={
+          <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+            <DutyResultsPage />
           </ProtectedRoute>
         }
       />

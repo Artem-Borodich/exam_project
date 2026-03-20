@@ -3,7 +3,6 @@ import { api } from "../services/api";
 
 type PendingUser = {
   id: number;
-  username: string;
   email: string | null;
   name: string | null;
   createdAt: string;
@@ -58,9 +57,9 @@ export function ManagerConfirmPage() {
             key={u.id}
             style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}
           >
-            <div style={{ fontWeight: 600 }}>{u.username}</div>
+            <div style={{ fontWeight: 600 }}>{u.email}</div>
             <div style={{ color: "#555" }}>
-              {u.email ? `Email: ${u.email}` : "No email"} {u.name ? `- ${u.name}` : ""}
+              {u.name ? `Name: ${u.name}` : ""}
             </div>
             <button
               onClick={() => confirm(u.id)}

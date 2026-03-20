@@ -20,7 +20,7 @@ export function ProtectedRoute({ children, allowedRoles }: Props) {
   if (allowedRoles && allowedRoles.length > 0) {
     const role = user?.roleName ?? null;
     if (!allowedRoles.includes(role)) {
-      return <Navigate to="/zones" replace />;
+      return <Navigate to="/login" replace />;
     }
   }
 

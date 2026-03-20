@@ -14,7 +14,7 @@ export async function createZone(input: {
   const zone = await prisma.zone.create({
     data: {
       name: input.name,
-      polygon,
+      polygonCoordinates: polygon,
       createdById: input.createdById,
     },
   });
@@ -25,14 +25,14 @@ export async function createZone(input: {
 export async function listZones() {
   return prisma.zone.findMany({
     orderBy: { createdAt: "desc" },
-    select: { id: true, name: true, polygon: true, createdAt: true },
+    select: { id: true, name: true, polygonCoordinates: true, createdAt: true },
   });
 }
 
 export async function getZoneById(id: number) {
   return prisma.zone.findUnique({
     where: { id },
-    select: { id: true, name: true, polygon: true, createdAt: true },
+    select: { id: true, name: true, polygonCoordinates: true, createdAt: true },
   });
 }
 

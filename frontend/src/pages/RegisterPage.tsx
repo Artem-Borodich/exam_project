@@ -8,7 +8,6 @@ export function RegisterPage() {
   const register = useAuthStore((s) => s.register);
 
   const [form, setForm] = useState({
-    username: "",
     email: "",
     name: "",
     password: "",
@@ -24,8 +23,7 @@ export function RegisterPage() {
     setLoading(true);
     try {
       await register({
-        username: form.username,
-        email: form.email || undefined,
+        email: form.email,
         name: form.name || undefined,
         password: form.password,
       });
@@ -43,21 +41,12 @@ export function RegisterPage() {
       <h1>Register</h1>
       <form onSubmit={onSubmit}>
         <div style={{ marginBottom: 12 }}>
-          <label>Username</label>
-          <input
-            value={form.username}
-            onChange={(e) => setForm((s) => ({ ...s, username: e.target.value }))}
-            style={{ width: "100%", padding: 8 }}
-            required
-          />
-        </div>
-        <div style={{ marginBottom: 12 }}>
           <label>Email</label>
           <input
             value={form.email}
             onChange={(e) => setForm((s) => ({ ...s, email: e.target.value }))}
             style={{ width: "100%", padding: 8 }}
-            type="email"
+            required
           />
         </div>
         <div style={{ marginBottom: 12 }}>

@@ -5,40 +5,27 @@ const bcrypt = require("bcrypt");
 async function main() {
   const prisma = new PrismaClient();
 
-  // Ensure roles exist
-  const roles = [
-    { name: "USER" },
-    { name: "EMPLOYEE" },
-    { name: "MANAGER" },
-  ];
-
-  for (const r of roles) {
-    await prisma.role.upsert({
-      where: { name: r.name },
-      update: {},
-      create: { name: r.name },
-    });
-  }
-
-  const managerRole = await prisma.role.findUnique({ where: { name: "MANAGER" } });
-
-  // Auto-create manager: login "manager", password "12345"
+  // Default manager must exist:
+  // login: manager
+  // password: 12345
+  //
+  // Exam requirement: role in DB is nullable (null | employee | manager) and manager is approved by default.
   const managerPasswordHash = await bcrypt.hash("12345", 10);
 
   await prisma.user.upsert({
-    where: { username: "manager" },
+    where: { email: "manager" },
     update: {
-      passwordHash: managerPasswordHash,
-      roleId: managerRole.id,
+      password: managerPasswordHash,
+      role: "MANAGER",
+      isApproved: true,
       name: "Manager",
-      email: "manager@example.com",
     },
     create: {
-      username: "manager",
-      email: "manager@example.com",
+      email: "manager",
+      password: managerPasswordHash,
+      role: "MANAGER",
+      isApproved: true,
       name: "Manager",
-      passwordHash: managerPasswordHash,
-      roleId: managerRole.id,
     },
   });
 

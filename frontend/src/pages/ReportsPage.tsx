@@ -2,57 +2,57 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../services/api";
 
 type Zone = { id: number; name: string };
-type ReportResponse = {
-  report: {
-    id: number;
-    googleDocUrl: string | null;
-    googleDocId: string | null;
-  };
-};
 
-function toIsoFromLocalInput(value: string) {
-  // datetime-local: "YYYY-MM-DDTHH:mm"
-  const d = new Date(value);
-  return d.toISOString();
-}
+type ReportResponse = {
+  zoneId: number;
+  zoneName: string;
+  fromDate: string;
+  toDate: string;
+  intervals: Array<{ label: string }>;
+  days: Array<{
+    day: string; // YYYY-MM-DD
+    buckets: Array<{
+      greenWithCars: number;
+      greenWithoutCarsPlusRedWithoutCars: number;
+      redWithCars: number;
+    }>;
+  }>;
+};
 
 export function ReportsPage() {
   const [zones, setZones] = useState<Zone[]>([]);
-  const [selectedZoneIds, setSelectedZoneIds] = useState<number[]>([]);
+  const [zoneId, setZoneId] = useState<number | null>(null);
 
-  const [fromAt, setFromAt] = useState<string>(() => {
+  const [fromDate, setFromDate] = useState<string>(() => {
     const d = new Date();
     d.setDate(d.getDate() - 7);
-    return d.toISOString().slice(0, 16);
+    return d.toISOString().slice(0, 10);
   });
-  const [toAt, setToAt] = useState<string>(() => new Date().toISOString().slice(0, 16));
+  const [toDate, setToDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
 
+  const [report, setReport] = useState<ReportResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [docUrl, setDocUrl] = useState<string | null>(null);
-  const [syncLoading, setSyncLoading] = useState(false);
-  const [syncResult, setSyncResult] = useState<string | null>(null);
+
+  const canGenerate = useMemo(() => zoneId != null && fromDate && toDate, [zoneId, fromDate, toDate]);
 
   useEffect(() => {
     api
       .get<Zone[]>("/zones")
-      .then(({ data }) => setZones(data))
+      .then(({ data }) => {
+        setZones(data);
+        if (data.length > 0) setZoneId((prev) => prev ?? data[0].id);
+      })
       .catch(() => {});
   }, []);
 
-  const selectedSet = useMemo(() => new Set(selectedZoneIds), [selectedZoneIds]);
-
   async function generate() {
+    if (!zoneId) return;
     setLoading(true);
     setError(null);
-    setDocUrl(null);
     try {
-      const result = await api.post<ReportResponse>("/reports/generate", {
-        fromAt: toIsoFromLocalInput(fromAt),
-        toAt: toIsoFromLocalInput(toAt),
-        zoneIds: selectedZoneIds,
-      });
-      setDocUrl(result.data.report.googleDocUrl ?? null);
+      const res = await api.post<ReportResponse>("/reports/generate", { zoneId, fromDate, toDate });
+      setReport(res.data);
     } catch (e: any) {
       setError(e?.response?.data?.message ?? e?.message ?? "Generate report failed");
     } finally {
@@ -60,55 +60,36 @@ export function ReportsPage() {
     }
   }
 
-  async function syncObservations() {
-    setSyncLoading(true);
-    setSyncResult(null);
-    try {
-      const res = await api.post<{ processed: number; upserted: number; skipped: number }>(
-        "/observations/sync",
-        {}
-      );
-      setSyncResult(
-        `processed=${res.data.processed}, upserted=${res.data.upserted}, skipped=${res.data.skipped}`
-      );
-    } catch (e: any) {
-      setError(e?.response?.data?.message ?? e?.message ?? "Sync failed");
-    } finally {
-      setSyncLoading(false);
-    }
-  }
-
-  function toggleZone(id: number) {
-    setSelectedZoneIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  }
-
   return (
-    <div style={{ maxWidth: 980, margin: "24px auto", padding: 16 }}>
-      <h1>Reports</h1>
-
+    <div style={{ maxWidth: 1100, margin: "24px auto", padding: 16 }}>
+      <h1>Duty Results Report</h1>
       {error ? <div style={{ color: "crimson", marginBottom: 12 }}>{error}</div> : null}
 
-      <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: 16, alignItems: "start" }}>
         <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>Generate Google Docs report</div>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>Report parameters</div>
 
-          <button
-            onClick={syncObservations}
-            disabled={syncLoading}
-            style={{ width: "100%", padding: "10px 14px", marginBottom: 12 }}
-          >
-            {syncLoading ? "Syncing..." : "Sync observations from Google Sheets"}
-          </button>
-          {syncResult ? <div style={{ fontSize: 12, color: "#555", marginBottom: 12 }}>{syncResult}</div> : null}
+          <div style={{ marginBottom: 12 }}>
+            <label>Zone</label>
+            <select
+              value={zoneId ?? ""}
+              onChange={(e) => setZoneId(Number(e.target.value))}
+              style={{ width: "100%", padding: 8, marginTop: 6 }}
+            >
+              {zones.map((z) => (
+                <option key={z.id} value={z.id}>
+                  {z.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div style={{ marginBottom: 12 }}>
             <label>From</label>
             <input
-              type="datetime-local"
-              value={fromAt}
-              onChange={(e) => setFromAt(e.target.value)}
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
               style={{ width: "100%", padding: 8, marginTop: 6 }}
             />
           </div>
@@ -116,32 +97,16 @@ export function ReportsPage() {
           <div style={{ marginBottom: 12 }}>
             <label>To</label>
             <input
-              type="datetime-local"
-              value={toAt}
-              onChange={(e) => setToAt(e.target.value)}
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
               style={{ width: "100%", padding: 8, marginTop: 6 }}
             />
           </div>
 
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontWeight: 600, marginBottom: 6 }}>Zones</div>
-            <div style={{ display: "grid", gap: 6, maxHeight: 220, overflow: "auto" }}>
-              {zones.map((z) => (
-                <label key={z.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input
-                    type="checkbox"
-                    checked={selectedSet.has(z.id)}
-                    onChange={() => toggleZone(z.id)}
-                  />
-                  <span>{z.name}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
           <button
             onClick={generate}
-            disabled={loading || selectedZoneIds.length === 0}
+            disabled={!canGenerate || loading}
             style={{ width: "100%", padding: "10px 14px" }}
           >
             {loading ? "Generating..." : "Generate report"}
@@ -149,15 +114,73 @@ export function ReportsPage() {
         </div>
 
         <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>Result</div>
-          {docUrl ? (
-            <a href={docUrl} target="_blank" rel="noreferrer">
-              Open Google Doc
-            </a>
-          ) : (
+          {!report ? (
             <div style={{ color: "#666" }}>
-              Generate a report to create a Google Docs document.
+              Select parameters and generate report. Columns are aggregated by fixed time buckets and grouped by day.
             </div>
+          ) : (
+            <>
+              <div style={{ fontWeight: 800, marginBottom: 8 }}>
+                {report.zoneName}: {report.fromDate} .. {report.toDate}
+              </div>
+
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    <th rowSpan={2} style={{ border: "1px solid #ddd", padding: 8, textAlign: "left" }}>
+                      Day
+                    </th>
+                    {report.intervals.map((i) => (
+                      <th key={i.label} colSpan={3} style={{ border: "1px solid #ddd", padding: 8 }}>
+                        {i.label}
+                      </th>
+                    ))}
+                  </tr>
+                  <tr>
+                    {report.intervals.flatMap((i, idx) => [
+                      <th
+                        key={`${i.label}-${idx}-gwc`}
+                        style={{ border: "1px solid #ddd", padding: 6, fontSize: 12 }}
+                      >
+                        greenWithCars
+                      </th>,
+                      <th
+                        key={`${i.label}-${idx}-gwrwc`}
+                        style={{ border: "1px solid #ddd", padding: 6, fontSize: 12 }}
+                      >
+                        greenWithoutCars+redWithoutCars
+                      </th>,
+                      <th
+                        key={`${i.label}-${idx}-rwc`}
+                        style={{ border: "1px solid #ddd", padding: 6, fontSize: 12 }}
+                      >
+                        redWithCars
+                      </th>,
+                    ])}
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.days.map((d) => (
+                    <tr key={d.day}>
+                      <td style={{ border: "1px solid #ddd", padding: 8 }}>{d.day}</td>
+                      {d.buckets.map((b, idx) => (
+                        <span key={`${d.day}-${idx}`}>
+                          <td style={{ border: "1px solid #ddd", padding: 8, textAlign: "right" }}>
+                            {b.greenWithCars}
+                          </td>
+                          <td style={{ border: "1px solid #ddd", padding: 8, textAlign: "right" }}>
+                            {b.greenWithoutCarsPlusRedWithoutCars}
+                          </td>
+                          <td style={{ border: "1px solid #ddd", padding: 8, textAlign: "right" }}>
+                            {b.redWithCars}
+                          </td>
+                        </span>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
           )}
         </div>
       </div>

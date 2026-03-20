@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { HttpError } from "../utils/httpError";
 
-type RoleName = "USER" | "EMPLOYEE" | "MANAGER";
+type RoleName = "EMPLOYEE" | "MANAGER";
 
 export function requireRole(allowed: RoleName[]) {
   return function (req: Request, _res: Response, next: NextFunction) {

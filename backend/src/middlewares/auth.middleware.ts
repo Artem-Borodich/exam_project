@@ -3,7 +3,7 @@ import { verifyJwt } from "../services/jwt.service";
 import { prisma } from "../services/prisma";
 import { HttpError } from "../utils/httpError";
 
-type RoleName = "USER" | "EMPLOYEE" | "MANAGER";
+type RoleName = "EMPLOYEE" | "MANAGER";
 
 declare global {
   namespace Express {
@@ -11,7 +11,7 @@ declare global {
     interface Request {
       user?: {
         id: number;
-        username: string;
+        email: string;
         roleName: RoleName | null;
       };
     }
@@ -35,7 +35,7 @@ export async function authMiddleware(
     throw new HttpError(500, "JWT_SECRET is not configured");
   }
 
-  let decoded: { userId: number; roleName?: string };
+  let decoded: { userId: number; role?: string };
   try {
     decoded = verifyJwt(token, envSecret);
   } catch {
@@ -44,7 +44,7 @@ export async function authMiddleware(
 
   const user = await prisma.user.findUnique({
     where: { id: decoded.userId },
-    include: { role: true },
+    select: { id: true, email: true, role: true, isApproved: true, name: true },
   });
 
   if (!user) {
@@ -53,8 +53,8 @@ export async function authMiddleware(
 
   req.user = {
     id: user.id,
-    username: user.username,
-    roleName: (user.role?.name ?? null) as RoleName | null,
+    email: user.email,
+    roleName: (user.role ?? null) as RoleName | null,
   };
 
   next();

@@ -2,12 +2,14 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { asyncHandler } from "../utils/asyncHandler";
 import { HttpError } from "../utils/httpError";
-import { generateReport } from "../services/reports.service";
+import { generateDutyZoneReport } from "../services/reports.service";
+
+const YYYYMMDD = /^\d{4}-\d{2}-\d{2}$/;
 
 const GenerateReportSchema = z.object({
-  fromAt: z.string().datetime(),
-  toAt: z.string().datetime(),
-  zoneIds: z.array(z.number().int().positive()).min(1),
+  zoneId: z.number().int().positive(),
+  fromDate: z.string().regex(YYYYMMDD),
+  toDate: z.string().regex(YYYYMMDD),
 });
 
 export const generateReportHandler = [
@@ -15,20 +17,20 @@ export const generateReportHandler = [
     if (!req.user) throw new HttpError(401, "Unauthorized");
     const data = GenerateReportSchema.parse(req.body);
 
-    const fromAt = new Date(data.fromAt);
-    const toAt = new Date(data.toAt);
-    if (Number.isNaN(fromAt.getTime()) || Number.isNaN(toAt.getTime())) {
-      throw new HttpError(400, "Invalid fromAt/toAt");
+    const fromDate = new Date(`${data.fromDate}T00:00:00.000Z`);
+    const toDate = new Date(`${data.toDate}T00:00:00.000Z`);
+    if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
+      throw new HttpError(400, "Invalid fromDate/toDate");
     }
 
-    const result = await generateReport({
+    const result = await generateDutyZoneReport({
       managerUserId: req.user.id,
-      fromAt,
-      toAt,
-      zoneIds: data.zoneIds,
+      zoneId: data.zoneId,
+      fromDate,
+      toDate,
     });
 
-    res.status(201).json(result);
+    res.status(200).json(result);
   }),
 ];
 
